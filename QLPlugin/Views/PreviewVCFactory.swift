@@ -8,6 +8,8 @@ class PreviewVCFactory {
 			return FolderPreview.self
 		}
 		switch fileURL.pathExtension.lowercased() {
+			case "diff", "patch":
+				return DiffPreview.self
 			case "gz":
 				// `gzip` is only supported for tarballs
 				return fileURL.path.hasSuffix(".tar.gz") ? TARPreview.self : nil

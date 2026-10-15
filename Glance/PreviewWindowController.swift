@@ -10,6 +10,8 @@ final class PreviewWindowController: NSWindowController, NSToolbarDelegate, NSWi
 	private var imageRoot: URL?
 	private var imageScopeActive = false
 	private var fileScopeActive = false
+	private var observer: LivePreviewObserver?
+	private var previewGeneration = 0
 
 	init(fileURL: URL) throws {
 		self.fileURL = fileURL
@@ -24,9 +26,17 @@ final class PreviewWindowController: NSWindowController, NSToolbarDelegate, NSWi
 		window.representedURL = fileURL
 		window.minSize = NSSize(width: 650, height: 400)
 		window.isReleasedWhenClosed = false
+		window.setFrameAutosaveName("GlanceStandalonePreview")
 		window.delegate = self
 		fileScopeActive = fileURL.startAccessingSecurityScopedResource()
 		try reload()
+		observer = LivePreviewObserver(url: fileURL) { [weak self] in
+			guard let self = self else {
+				return false
+			}
+			do { try self.reload(); return true } catch { return false }
+		}
+		observer?.start()
 		let markdownExtensions = ["md", "markdown", "mdown", "mkdn", "mkd", "rmd", "qmd"]
 		if markdownExtensions.contains(fileURL.pathExtension.lowercased()) {
 			let toolbar = NSToolbar(identifier: "GlancePreview")
@@ -39,6 +49,7 @@ final class PreviewWindowController: NSWindowController, NSToolbarDelegate, NSWi
 	required init?(coder _: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
 	deinit {
+		observer?.stop()
 		if fileScopeActive { fileURL.stopAccessingSecurityScopedResource() }
 		if imageScopeActive { imageRoot?.stopAccessingSecurityScopedResource() }
 	}
@@ -52,7 +63,7 @@ final class PreviewWindowController: NSWindowController, NSToolbarDelegate, NSWi
 			.size <= 10_000_000 && (try? file.read()) != nil
 		if !isTypeScript, let contentType = contentType,
 		   nativeTypes.contains(where: { contentType.conforms(to: $0) }) {
-			window?.contentViewController = NativePreviewVC(fileURL: fileURL)
+			install(NativePreviewVC(fileURL: fileURL))
 			return
 		}
 		guard file.isDirectory || file.isArchive || database || file.size <= 10_000_000 else {
@@ -66,14 +77,31 @@ final class PreviewWindowController: NSWindowController, NSToolbarDelegate, NSWi
 		}
 		let preview = type.init()
 		if let markdown = preview as? MarkdownPreview { markdown.imageRoot = imageRoot }
-		do { window?.contentViewController = try preview.createPreviewVC(file: file) } catch {
+		do { install(try preview.createPreviewVC(file: file)) } catch {
 			if preview is CodePreview {
-				window?.contentViewController = NativePreviewVC(fileURL: fileURL)
+				install(NativePreviewVC(fileURL: fileURL))
 			} else { throw error }
 		}
 	}
 
+	private func install(_ next: NSViewController) {
+		previewGeneration += 1
+		let generation = previewGeneration
+		let replace = { [weak self] in
+			guard let self = self, self.previewGeneration == generation else {
+				return
+			}
+			self.window?.contentViewController = next
+		}
+		if let old = window?.contentViewController as? WebPreviewVC,
+		   let nextWeb = next as? WebPreviewVC {
+			old.transferState(to: nextWeb, completion: replace)
+		} else { replace() }
+	}
+
 	func windowWillClose(_: Notification) {
+		observer?.stop()
+		previewGeneration += 1
 		window?.contentViewController = nil
 		onClose?()
 	}

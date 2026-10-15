@@ -89,6 +89,8 @@ It's possible that your file's extension or [UTI](https://en.wikipedia.org/wiki/
 2. Find your file's UTI by running `mdls -name kMDItemContentType /path/to/your/file`. Check whether the UTI is listed under `QLSupportedContentTypes` in [`Info.plist`](./QLPlugin/Info.plist).
 3. If an association is missing, please feel free to add it and submit a PR.
 
+The developer preview build also adds live refresh with scroll preservation, unified diff previews, sortable/paginated CSV and TSV tables, Markdown callouts and Mermaid zoom. SQLite navigation remains bounded to preview rows. See [developer previews](docs/developer-previews.md) for behavior and limits.
+
 ## Contributing
 
 Suggestions and contributions are always welcome! Please discuss larger changes (e.g. adding support for a new file type) via issue before submitting a pull request.

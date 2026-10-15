@@ -129,8 +129,13 @@ class DatabasePreview: Preview {
 				names.append(String(cString: text))
 			}
 		}
-		var html = "<h1>\(escapedHTML(file.url.lastPathComponent))</h1><p>Read-only · first 200 rows per table · at most 50 tables</p>"
-		for name in names {
+		var html = "<h1>\(escapedHTML(file.url.lastPathComponent))</h1><p>Read-only · first 200 rows per table · at most 50 tables. Pages browse only these preview rows.</p>"
+		html += "<label>Table <select id=\"glance-database-table\"><option value=\"all\">All tables</option>"
+		for (index, name) in names.enumerated() {
+			html += "<option value=\"\(index)\">\(escapedHTML(name))</option>"
+		}
+		html += "</select></label>"
+		for (tableIndex, name) in names.enumerated() {
 			if Date() > deadline || html.utf8.count > 2_000_000 { break }
 			let quoted = "\"" + name.replacingOccurrences(of: "\"", with: "\"\"") + "\""
 			var rows: OpaquePointer?
@@ -142,19 +147,20 @@ class DatabasePreview: Preview {
 				nil
 			) == SQLITE_OK else { continue }
 			defer { sqlite3_finalize(rows) }
-			html += "<details><summary>\(escapedHTML(name))</summary><div style=\"overflow:auto\"><table><thead><tr>"
+			html += "<details class=\"glance-database\" data-table=\"\(tableIndex)\"><summary>\(escapedHTML(name))</summary><div style=\"overflow:auto\"><table><thead><tr>"
 			let columns = sqlite3_column_count(rows)
 			for index in 0 ..<
 				columns {
-				html +=
-					"<th>\(escapedHTML(String(cString: sqlite3_column_name(rows, index))))</th>"
+				let declaredType = sqlite3_column_decltype(rows, index)
+					.map { String(cString: $0) } ?? "Undeclared type"
+				html += "<th title=\"\(escapedHTML(declaredType))\">\(escapedHTML(String(cString: sqlite3_column_name(rows, index))))</th>"
 			}
 			html += "</tr></thead><tbody>"
 			var count = 0
 			while sqlite3_step(rows) == SQLITE_ROW {
 				if Date() > deadline || html.utf8.count > 2_000_000 { break }
 				guard count < 200
-				else { html += "<tr><td>Additional rows omitted.</td></tr>"; break }
+				else { break }
 				count += 1
 				html += "<tr>"
 				for index in 0 ..< columns {
@@ -171,11 +177,42 @@ class DatabasePreview: Preview {
 				}
 				html += "</tr>"
 			}
-			html += "</tbody></table></div></details>"
+			html += "</tbody></table></div><div class=\"glance-database-pages\"></div>"
+			if count ==
+				200 { html += "<p>Preview capped at 200 rows; additional rows may be omitted.</p>" }
+			html += "</details>"
 		}
 		if Date() > deadline {
 			html += "<p>Preview time limit reached.</p>"
 		}
-		return WebPreviewVC(html: html)
+		return WebPreviewVC(html: html, scripts: [Script(content: Self.navigationScript)])
 	}
+
+	private static let navigationScript = """
+	const tables = Array.from(document.querySelectorAll('.glance-database'));
+	for (const section of tables) {
+	  const rows = Array.from(section.querySelectorAll('tbody tr'));
+	  let page = 0;
+	  const pages = Math.max(1, Math.ceil(rows.length / 50));
+	  const controls = section.querySelector('.glance-database-pages');
+	  const previous = document.createElement('button'); previous.textContent = 'Previous';
+	  const next = document.createElement('button'); next.textContent = 'Next';
+	  const status = document.createElement('span'); status.setAttribute('role', 'status');
+	  const update = () => {
+	    rows.forEach((row, index) => { row.hidden = Math.floor(index / 50) !== page; });
+	    status.textContent = rows.length ? ` Rows ${page * 50 + 1}–${Math.min((page + 1) * 50, rows.length)} of ${rows.length} preview rows · Page ${page + 1}/${pages} ` : ' No rows ';
+	    previous.disabled = page === 0; next.disabled = page + 1 >= pages;
+	  };
+	  previous.addEventListener('click', () => { if (page > 0) { page--; update(); } });
+	  next.addEventListener('click', () => { if (page + 1 < pages) { page++; update(); } });
+	  previous.setAttribute('aria-label', 'Previous database page'); next.setAttribute('aria-label', 'Next database page');
+	  controls.append(previous, status, next); update();
+	}
+	const picker = document.getElementById('glance-database-table');
+	picker.addEventListener('change', () => tables.forEach(section => {
+	  section.hidden = picker.value !== 'all' && section.dataset.table !== picker.value;
+	  if (picker.value !== 'all') section.open = !section.hidden;
+	}));
+	if (tables.length) { picker.value = tables[0].dataset.table; picker.dispatchEvent(new Event('change')); }
+	"""
 }

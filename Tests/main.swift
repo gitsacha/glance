@@ -55,6 +55,13 @@ flowchart LR
 
 $$E = mc^2$$
 
+> [!WARNING]
+> Verify the preview before sharing.
+
+```text
+[!NOTE] stays literal in code
+```
+
 <script>window.untrustedScriptExecuted = true</script>
 
 [Remote](https://example.com)
@@ -105,6 +112,51 @@ _ = javascript(
 check(
 	wait(until: { javascript("window.cspBlocked", in: controller) as? Bool == true }),
 	"WebKit actually rejects network fetches through CSP"
+)
+
+check(
+	javascript(
+		"document.querySelector('.markdown-alert-warning')?.textContent.includes('Verify the preview') === true",
+		in: controller
+	) as? Bool == true,
+	"GitHub warning renders as an accessible callout"
+)
+check(
+	javascript(
+		"Array.from(document.querySelectorAll('main pre')).some(pre => pre.textContent.includes('[!NOTE] stays literal in code'))",
+		in: controller
+	) as? Bool == true,
+	"Alert markers inside code remain literal"
+)
+check(
+	javascript(
+		"document.querySelector('[aria-label=\"Zoom in diagram\"]') !== null",
+		in: controller
+	) as? Bool == true,
+	"Mermaid has diagram zoom controls"
+)
+
+let diagramWidth = javascript(
+	"document.querySelector('.mermaid svg').style.width",
+	in: controller
+) as? String
+_ = javascript(
+	"document.querySelector('[aria-label=\"Zoom in diagram\"]').click(); true",
+	in: controller
+)
+check(
+	(javascript("document.querySelector('.mermaid svg').style.width", in: controller) as? String) !=
+		diagramWidth,
+	"Mermaid zoom changes diagram scale"
+)
+_ = javascript(
+	"document.querySelector('[aria-label=\"Reset diagram zoom\"]').click(); true",
+	in: controller
+)
+check(
+	javascript("document.querySelector('.mermaid svg').style.width", in: controller) as? String ==
+		diagramWidth,
+	"Mermaid reset restores diagram scale"
 )
 
 var toolbarCaptured = false
@@ -307,8 +359,9 @@ try "![Local](../local.png)".write(to: nestedMarkdown, atomically: true, encodin
 let standaloneMarkdown = try PreviewWindowController(fileURL: nestedMarkdown)
 try standaloneMarkdown.authorizeImageRoot(directory)
 check(
-	(standaloneMarkdown.window?.contentViewController as? WebPreviewVC)?.html
-		.contains("data:image/png;base64,") == true,
+	wait(until: { (standaloneMarkdown.window?.contentViewController as? WebPreviewVC)?.html
+			.contains("data:image/png;base64,") == true
+	}),
 	"Explicit project-folder access supports parent-directory Markdown images"
 )
 do { _ = try File(url: URL(string: "https://example.com/etc/hosts")!); check(
@@ -320,6 +373,270 @@ let standaloneImage = try PreviewWindowController(fileURL: imageURL)
 check(
 	standaloneImage.window?.contentViewController is NativePreviewVC,
 	"Standalone image keeps Apple's native preview inside Glance"
+)
+
+// End-to-end table ordering and page boundaries use the real controller.
+let sortable = TablePreviewVC(
+	headers: ["value", "identity"],
+	cells: [["10", "first"], ["2", "second"], ["2", "third"], [], [" ", "blank"]]
+)
+sortable.applySort(columnIndex: 0, ascending: true)
+check(
+	sortable.displayedRows.prefix(3).map { $0[1] } == ["second", "third", "first"],
+	"Numeric CSV sort is stable"
+)
+sortable.applySort(columnIndex: 0, ascending: false)
+check(
+	sortable.displayedRows.prefix(3).map { $0[1] } == ["first", "second", "third"] && sortable
+		.displayedRows[3].isEmpty,
+	"Descending CSV sort keeps missing and blank cells last"
+)
+let paged = TablePreviewVC(headers: ["number"], cells: (0 ..< 201).map { [String($0)] })
+check(paged.pageCount == 3 && paged.displayedRows.count == 100, "CSV starts with 100 rows per page")
+paged.nextPage()
+check(
+	paged.displayedRows.first == ["100"] && paged.displayedRows.count == 100,
+	"CSV next page reaches row 101"
+)
+paged.nextPage(); paged.nextPage()
+check(
+	paged.currentPage == 2 && paged.displayedRows == [["200"]],
+	"CSV final page and upper boundary are safe"
+)
+paged.applySort(columnIndex: 0, ascending: false)
+check(
+	paged.currentPage == 0 && paged.displayedRows.first == ["200"],
+	"Sorting CSV resets to the first page"
+)
+paged.previousPage()
+check(paged.currentPage == 0, "CSV previous page cannot pass the start")
+let emptyTable = TablePreviewVC(headers: [], cells: [])
+check(
+	emptyTable.pageCount == 1 && emptyTable.displayedRows.isEmpty,
+	"Empty CSV has a safe empty page"
+)
+let tableWindow = NSWindow(
+	contentRect: NSRect(x: -100_000, y: -100_000, width: 900, height: 650),
+	styleMask: [.borderless],
+	backing: .buffered,
+	defer: false
+)
+tableWindow.contentViewController = paged
+paged.view.layoutSubtreeIfNeeded()
+func findTable(in view: NSView) -> NSTableView? {
+	if let table = view as? NSTableView {
+		return table
+	}
+	return view.subviews.compactMap { findTable(in: $0) }.first
+}
+
+if let nativeTable = findTable(in: paged.view) {
+	nativeTable.sortDescriptors = [NSSortDescriptor(key: "0", ascending: true)]
+	check(paged.displayedRows.first == ["0"], "Native table sort descriptor drives column ordering")
+	check(nativeTable.numberOfRows == 100, "Native table contains only the current page")
+} else { check(false, "Native table is present") }
+if let image = paged.view.bitmapImageRepForCachingDisplay(in: paged.view.bounds) {
+	paged.view.cacheDisplay(in: paged.view.bounds, to: image)
+	try image.representation(using: .png, properties: [:])?
+		.write(to: directory.appendingPathComponent("table.png"))
+}
+
+let patch = """
+diff --git a/one.swift b/one.swift
+--- a/one.swift
++++ b/one.swift
+@@ -1,2 +3,2 @@
+-old
++<script>alert(1)</script>
+ context
+\\ No newline at end of file
+diff --git a/two.swift b/two.swift
+--- a/two.swift
++++ b/two.swift
+@@ -0,0 +1 @@
++new
+"""
+let patchURL = directory.appendingPathComponent("changes.patch")
+try patch.write(to: patchURL, atomically: true, encoding: .utf8)
+let diff = try DiffPreview().createPreviewVC(file: File(url: patchURL)) as! WebPreviewVC
+let diffWindow = NSWindow(
+	contentRect: NSRect(x: -100_000, y: -100_000, width: 1000, height: 750),
+	styleMask: [.borderless],
+	backing: .buffered,
+	defer: false
+)
+diffWindow.contentViewController = diff
+check(
+	wait(until: { javascript(
+		"document.querySelectorAll('.diff-file').length === 2",
+		in: diff
+	) as? Bool == true }),
+	"Multi-file diff renders both changed files"
+)
+check(
+	javascript(
+		"document.querySelector('.diff-remove .diff-number').textContent === '1' && document.querySelector('.diff-add .diff-number:nth-child(2)').textContent === '3'",
+		in: diff
+	) as? Bool == true,
+	"Diff pairs original and new line numbers"
+)
+check(
+	javascript(
+		"document.querySelectorAll('main script').length === 0 && document.querySelector('.diff-add').textContent.includes('<script>')",
+		in: diff
+	) as? Bool == true,
+	"Diff HTML is escaped rather than executed"
+)
+check(
+	diff.html.contains("No newline at end of file") && diff.html.contains("Changed files"),
+	"Diff retains metadata and file navigation"
+)
+check(
+	PreviewVCFactory.getPreviewInitializer(fileURL: patchURL) is DiffPreview.Type,
+	"Patch route selects dedicated diff renderer"
+)
+check(
+	// swiftformat:disable:next numberFormatting
+	DiffPreview.renderHTML(source: String(repeating: "+line\n", count: 12_010))
+		.contains("Preview limit reached"),
+	"Huge diff truncates its displayed rows"
+)
+check(
+	!DiffPreview.renderHTML(source: "@@ -9223372036854775807 +1 @@\n-old\n+new")
+		.contains("diff-remove\""),
+	"Overflowing diff line numbers safely fall back"
+)
+var diffSnapshotDone = false
+diff.webView.takeSnapshot(with: nil) { image, _ in
+	defer { diffSnapshotDone = true }
+	if let tiff = image?.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff) {
+		try? bitmap.representation(using: .png, properties: [:])?
+			.write(to: directory.appendingPathComponent("diff.png"))
+	}
+}
+
+check(wait(until: { diffSnapshotDone }), "Diff screenshot captured")
+
+// Database navigation is deliberately over bounded preview rows, never an unbounded query UI.
+var pagingDB: OpaquePointer?
+sqlite3_open(databaseURL.path, &pagingDB)
+for index in 0 ..< 120 {
+	sqlite3_exec(
+		pagingDB,
+		"INSERT INTO sample VALUES ('row-\(index)');",
+		nil,
+		nil,
+		nil
+	)
+}
+
+sqlite3_exec(
+	pagingDB,
+	"CREATE TABLE other (n INTEGER); INSERT INTO other VALUES (42);",
+	nil,
+	nil,
+	nil
+)
+sqlite3_close(pagingDB)
+let pagingBefore = try Data(contentsOf: databaseURL)
+let databaseNavigation = try DatabasePreview()
+	.createPreviewVC(file: File(url: databaseURL)) as! WebPreviewVC
+let dbWindow = NSWindow(
+	contentRect: NSRect(x: -100_000, y: -100_000, width: 900, height: 650),
+	styleMask: [.borderless],
+	backing: .buffered,
+	defer: false
+)
+dbWindow.contentViewController = databaseNavigation
+check(
+	wait(until: { javascript(
+		"document.querySelectorAll('#glance-database-table option').length === 3",
+		in: databaseNavigation
+	) as? Bool == true }),
+	"SQLite table picker lists discovered tables"
+)
+_ = javascript(
+	"document.getElementById('glance-database-table').value = '1'; document.getElementById('glance-database-table').dispatchEvent(new Event('change')); true",
+	in: databaseNavigation
+)
+check(
+	javascript(
+		"document.querySelectorAll('.glance-database:not([hidden])').length === 1 && document.querySelector('.glance-database:not([hidden]) tbody tr:not([hidden])') !== null",
+		in: databaseNavigation
+	) as? Bool == true,
+	"SQLite picker selects one visible table"
+)
+check(
+	javascript(
+		"document.querySelector('.glance-database[data-table=\"1\"] tbody').querySelectorAll('tr:not([hidden])').length === 50",
+		in: databaseNavigation
+	) as? Bool == true,
+	"SQLite shows 50 preview rows per page"
+)
+_ = javascript(
+	"document.querySelector('.glance-database[data-table=\"1\"] [aria-label=\"Next database page\"]').click(); true",
+	in: databaseNavigation
+)
+check(
+	javascript(
+		"document.querySelector('.glance-database[data-table=\"1\"] [role=status]').textContent.includes('51–100')",
+		in: databaseNavigation
+	) as? Bool == true,
+	"SQLite next page advances through bounded rows"
+)
+check(
+	databaseNavigation.html.contains("title=\"TEXT\""),
+	"SQLite column header includes its declared type"
+)
+check(
+	try Data(contentsOf: databaseURL) == pagingBefore,
+	"SQLite navigation leaves database bytes unchanged"
+)
+
+let liveURL = directory.appendingPathComponent("live.md")
+let longDocument = "# Live document\n\n" + (0 ..< 150)
+	.map { "Paragraph \($0) has enough content for scrolling.\n\n" }.joined()
+try longDocument.write(to: liveURL, atomically: true, encoding: .utf8)
+let liveWindow = try PreviewWindowController(fileURL: liveURL)
+liveWindow.window?.setFrame(
+	NSRect(x: -100_000, y: -100_000, width: 900, height: 650),
+	display: false
+)
+let initialLive = liveWindow.window!.contentViewController as! WebPreviewVC
+check(
+	wait(until: { javascript("window.glanceReady === true", in: initialLive) as? Bool == true }),
+	"Live Markdown initial render is ready"
+)
+_ = javascript("window.scrollTo(0, 900); true", in: initialLive)
+let scrollBefore = (javascript("window.scrollY", in: initialLive) as? NSNumber)?.doubleValue ?? 0
+try (longDocument + "\nAtomic save marker\n").write(to: liveURL, atomically: true, encoding: .utf8)
+check(
+	wait(until: {
+		(liveWindow.window?.contentViewController as? WebPreviewVC)?.html
+			.contains("Atomic save marker") == true
+	}),
+	"Live preview detects atomic file replacement"
+)
+let refreshedLive = liveWindow.window!.contentViewController as! WebPreviewVC
+check(wait(until: {
+	let scrollAfter = (javascript("window.scrollY", in: refreshedLive) as? NSNumber)?
+		.doubleValue ?? 0
+	return scrollBefore > 0 && abs(scrollAfter - scrollBefore) < 3
+}), "Live refresh preserves the actual scroll position")
+let movedLive = directory.appendingPathComponent("live-moving.md")
+try FileManager.default.moveItem(at: liveURL, to: movedLive)
+_ = wait(until: { false }, seconds: 0.8)
+check(
+	liveWindow.window?.contentViewController === refreshedLive,
+	"A temporarily missing file retains the last good preview"
+)
+try FileManager.default.moveItem(at: movedLive, to: liveURL)
+liveWindow.window?.close()
+try (longDocument + "\nAfter close marker\n").write(to: liveURL, atomically: true, encoding: .utf8)
+_ = wait(until: { false }, seconds: 0.8)
+check(
+	liveWindow.window?.contentViewController == nil,
+	"Closing the preview stops refresh and releases its view"
 )
 
 print("Failures: \(failures)")

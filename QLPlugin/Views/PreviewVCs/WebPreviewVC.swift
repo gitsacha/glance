@@ -42,6 +42,8 @@ final class PreviewAssetHandler: NSObject, WKURLSchemeHandler {
 /// Reports rendering completion from inside the actual sandboxed extension, without logging
 /// content.
 final class PreviewReadyHandler: NSObject, WKScriptMessageHandler {
+	var onReady: (() -> Void)?
+
 	func userContentController(_: WKUserContentController, didReceive message: WKScriptMessage) {
 		guard let counts = message.body as? [String: Int] else {
 			return
@@ -55,10 +57,94 @@ final class PreviewReadyHandler: NSObject, WKScriptMessageHandler {
 			counts["math", default: 0],
 			counts["text", default: 0]
 		)
+		onReady?()
+	}
+}
+
+/// Polls metadata only while a preview is alive. Looking up the path on each tick also detects
+/// editors that save to a temporary file and atomically replace the original inode.
+final class LivePreviewObserver {
+	private struct Signature: Equatable {
+		let inode: UInt64
+		let size: UInt64
+		let modified: Date
+	}
+
+	private let url: URL
+	private let onChange: () -> Bool
+	private var timer: Timer?
+	private var accepted: Signature?
+	private var candidate: Signature?
+	private var retryAfter = Date.distantPast
+
+	init(url: URL, onChange: @escaping () -> Bool) {
+		self.url = url
+		self.onChange = onChange
+	}
+
+	func start() {
+		guard timer == nil else {
+			return
+		}
+		if accepted == nil { accepted = signature() }
+		candidate = nil
+		let timer = Timer(timeInterval: 0.35, repeats: true) { [weak self] _ in
+			self?.tick()
+		}
+		self.timer = timer
+		RunLoop.main.add(timer, forMode: .common)
+	}
+
+	func stop() {
+		timer?.invalidate()
+		timer = nil
+		candidate = nil
+	}
+
+	deinit { stop() }
+
+	private func signature() -> Signature? {
+		guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+		      let inode = attributes[.systemFileNumber] as? NSNumber,
+		      let size = attributes[.size] as? NSNumber,
+		      let modified = attributes[.modificationDate] as? Date else { return nil }
+		return Signature(inode: inode.uint64Value, size: size.uint64Value, modified: modified)
+	}
+
+	private func tick() {
+		// A missing path is normal during an atomic save. Keep showing the last good preview.
+		guard let current = signature() else {
+			candidate = nil
+			return
+		}
+		guard current != accepted else {
+			candidate = nil
+			return
+		}
+		guard current == candidate else {
+			candidate = current
+			return
+		}
+		guard Date() >= retryAfter else {
+			return
+		}
+		if onChange() {
+			accepted = current
+		} else {
+			// Retry transient read failures without logging or rebuilding on every timer tick.
+			retryAfter = Date().addingTimeInterval(2)
+		}
 	}
 }
 
 class WebPreviewVC: NSViewController, PreviewVC, WKNavigationDelegate {
+	private struct ScrollState {
+		let x: Double
+		let y: Double
+		let contents: Bool
+		let search: String
+	}
+
 	let html: String
 	private let stylesheets: [Stylesheet]
 	private let scripts: [Script]
@@ -66,6 +152,8 @@ class WebPreviewVC: NSViewController, PreviewVC, WKNavigationDelegate {
 	private let preferences = UserDefaults.standard
 	private var searchField: NSSearchField!
 	private(set) var webView: WKWebView!
+	private var readyHandler: PreviewReadyHandler?
+	private var pendingScrollState: ScrollState?
 
 	required convenience init(
 		html: String,
@@ -111,7 +199,10 @@ class WebPreviewVC: NSViewController, PreviewVC, WKNavigationDelegate {
 		super.viewDidLoad()
 		let configuration = WKWebViewConfiguration()
 		configuration.websiteDataStore = .nonPersistent()
-		configuration.userContentController.add(PreviewReadyHandler(), name: "glanceReady")
+		let readyHandler = PreviewReadyHandler()
+		readyHandler.onReady = { [weak self] in self?.restoreScroll() }
+		self.readyHandler = readyHandler
+		configuration.userContentController.add(readyHandler, name: "glanceReady")
 		configuration.setURLSchemeHandler(PreviewAssetHandler(), forURLScheme: "glance-resource")
 		webView = WKWebView(frame: .zero, configuration: configuration)
 		webView.navigationDelegate = self
@@ -154,6 +245,53 @@ class WebPreviewVC: NSViewController, PreviewVC, WKNavigationDelegate {
 			webView.widthAnchor.constraint(equalTo: stack.widthAnchor),
 		])
 		webView.loadHTMLString(documentHTML, baseURL: URL(string: "glance-resource://bundle/"))
+	}
+
+	/// Capture the actual web scroll before replacing a controller. Rendering happens after the
+	/// replacement enters its view, so the new controller restores only after its ready event.
+	func transferState(to replacement: WebPreviewVC, completion: @escaping () -> Void) {
+		guard isViewLoaded else {
+			completion()
+			return
+		}
+		let search = searchField.stringValue
+		webView.evaluateJavaScript(
+			"({x: window.scrollX, y: window.scrollY, contents: document.body.classList.contains('contents')})"
+		) { value, _ in
+			if let values = value as? [String: Any] {
+				replacement.pendingScrollState = ScrollState(
+					x: (values["x"] as? NSNumber)?.doubleValue ?? 0,
+					y: (values["y"] as? NSNumber)?.doubleValue ?? 0,
+					contents: values["contents"] as? Bool ?? false,
+					search: search
+				)
+			}
+			completion()
+		}
+	}
+
+	private func restoreScroll() {
+		guard let state = pendingScrollState else {
+			return
+		}
+		pendingScrollState = nil
+		searchField.stringValue = state.search
+		// Images and diagrams can change the document height after the ready message. Keep the
+		// requested position through the next few layout passes, unless the user scrolls.
+		let script = """
+		(() => {
+		  document.body.classList.toggle('contents', \(state.contents));
+		  const x = \(state.x), y = \(state.y);
+		  let active = true;
+		  const cancel = () => { active = false; };
+		  ['wheel', 'touchstart', 'mousedown', 'keydown'].forEach(name =>
+		    window.addEventListener(name, cancel, {once:true, passive:true}));
+		  const restore = () => { if (active) window.scrollTo(x, y); };
+		  requestAnimationFrame(() => requestAnimationFrame(restore));
+		  [120, 400, 900].forEach(delay => setTimeout(restore, delay));
+		})();
+		"""
+		webView.evaluateJavaScript(script, completionHandler: nil)
 	}
 
 	private func button(_ title: String, action: Selector) -> NSButton {
