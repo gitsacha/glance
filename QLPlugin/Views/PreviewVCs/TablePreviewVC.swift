@@ -3,11 +3,11 @@ import os.log
 
 class TablePreviewVC: NSViewController, PreviewVC {
 	let headers: [String]
-	let cells: [[String: String]]
+	let cells: [[String]]
 
 	@IBOutlet private var tableView: NSTableView!
 
-	required convenience init(headers: [String], cells: [[String: String]]) {
+	required convenience init(headers: [String], cells: [[String]]) {
 		self.init(nibName: nil, bundle: nil, headers: headers, cells: cells)
 	}
 
@@ -15,7 +15,7 @@ class TablePreviewVC: NSViewController, PreviewVC {
 		nibName nibNameOrNil: NSNib.Name?,
 		bundle nibBundleOrNil: Bundle?,
 		headers: [String],
-		cells: [[String: String]]
+		cells: [[String]]
 	) {
 		self.headers = headers
 		self.cells = cells
@@ -50,8 +50,8 @@ class TablePreviewVC: NSViewController, PreviewVC {
 
 	/// Creates table columns for all headers.
 	private func createColumns() {
-		for header in headers {
-			let columnID = NSUserInterfaceItemIdentifier(rawValue: header)
+		for (index, header) in headers.enumerated() {
+			let columnID = NSUserInterfaceItemIdentifier(rawValue: String(index))
 			let column = NSTableColumn(identifier: columnID)
 			column.title = header
 			column.minWidth = 50
@@ -73,11 +73,17 @@ extension TablePreviewVC: NSTableViewDataSource, NSTableViewDelegate {
 		row rowIndex: Int
 	) -> NSView? {
 		let row = cells[rowIndex]
-		let cellValue = row[tableColumn!.identifier.rawValue] ?? ""
+		guard let identifier = tableColumn?.identifier.rawValue,
+		      let columnIndex = Int(identifier)
+		else {
+			return nil
+		}
+		let cellValue = columnIndex < row.count ? row[columnIndex] : ""
 
 		let textField = NSTextField()
 		textField.stringValue = cellValue
 		textField.isEditable = false
+		textField.isSelectable = true
 		textField.isBordered = false
 		textField.drawsBackground = false
 		textField.lineBreakMode = .byTruncatingTail

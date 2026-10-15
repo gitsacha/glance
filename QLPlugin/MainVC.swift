@@ -28,6 +28,7 @@ class MainVC: NSViewController, QLPreviewingController {
 	override func viewDidLoad() {
 		super.viewDidLoad()
 		setUpView()
+		preferredContentSize = NSSize(width: 900, height: 650)
 	}
 
 	private func setUpView() {
@@ -61,7 +62,10 @@ class MainVC: NSViewController, QLPreviewingController {
 			}
 
 			// Skip preview if the file is too large
-			if !file.isDirectory, !file.isArchive, file.size > self.maxFileSize {
+			let databaseExtensions = ["db", "sqlite", "sqlite3"]
+			let isDatabase = databaseExtensions.contains(file.url.pathExtension.lowercased())
+			let sizeLimited = !file.isDirectory && !file.isArchive && !isDatabase
+			if sizeLimited, file.size > self.maxFileSize {
 				// Log error and fall back to default preview (by calling the completion handler
 				// with the error)
 				let error = PreviewError.fileSizeError(path: file.path)
@@ -110,11 +114,24 @@ class MainVC: NSViewController, QLPreviewingController {
 			let previewInitializer = previewInitializerType.init()
 			let previewVC = try previewInitializer.createPreviewVC(file: file)
 
+			// Quick Look may reuse the controller for another file.
+			for child in children {
+				child.view.removeFromSuperview(); child.removeFromParent()
+			}
+
 			// Add `PreviewVC` as a child view controller
 			addChild(previewVC)
 			previewVC.view.autoresizingMask = [.height, .width]
 			previewVC.view.frame = view.bounds
 			view.addSubview(previewVC.view)
+
+			os_log(
+				"Preview ready: %{public}s (.%{public}s)",
+				log: Log.render,
+				type: .info,
+				String(describing: previewInitializerType),
+				file.url.pathExtension.lowercased()
+			)
 
 			// Update stats
 			stats.increaseStatsCounts(fileExtension: file.url.pathExtension)
