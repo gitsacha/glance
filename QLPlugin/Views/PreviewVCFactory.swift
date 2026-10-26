@@ -4,7 +4,14 @@ import Foundation
 /// May return `nil` if the file is not supported.
 class PreviewVCFactory {
 	static func getPreviewInitializer(fileURL: URL) -> Preview.Type? {
+		if (try? fileURL.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+			return FolderPreview.self
+		}
 		switch fileURL.pathExtension.lowercased() {
+			case "sqlite", "sqlite3", "db":
+				return DatabasePreview.self
+			case "diff", "patch":
+				return DiffPreview.self
 			case "gz":
 				// `gzip` is only supported for tarballs
 				return fileURL.path.hasSuffix(".tar.gz") ? TARPreview.self : nil
@@ -14,7 +21,7 @@ class PreviewVCFactory {
 				return JupyterPreview.self
 			case "tar", "tgz":
 				return TARPreview.self
-			case "tab", "tsv":
+			case "tab", "tsv", "csv":
 				return TSVPreview.self
 			case "7z":
 				return SevenZipPreview.self

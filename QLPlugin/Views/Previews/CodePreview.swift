@@ -1,3 +1,4 @@
+// swiftformat:disable wrapMultilineStatementBraces
 import Foundation
 import os.log
 
@@ -29,6 +30,11 @@ let fileExtensionLexers = [
 	"alfredappearance": "json",
 	"mobileconfig": "xml",
 	"cjs": "js",
+	"ts": "typescript",
+	"tsx": "tsx",
+	"jsonl": "json",
+	"env": "ini",
+	"yml": "yaml",
 	"cls": "tex",
 	"csproj": "xml",
 	"entitlements": "xml",
@@ -92,7 +98,43 @@ class CodePreview: Preview {
 	}
 
 	func getSource(file: File) throws -> String {
-		try file.read()
+		let data = try Data(contentsOf: file.url)
+		if file.url.pathExtension.lowercased() == "plist" {
+			let plist = try PropertyListSerialization.propertyList(
+				from: data,
+				options: [],
+				format: nil
+			)
+			let xml = try PropertyListSerialization.data(
+				fromPropertyList: plist,
+				format: .xml,
+				options: 0
+			)
+			return String(decoding: xml, as: UTF8.self)
+		}
+		let source = try file.read()
+		if file.url.pathExtension.lowercased() == "json" {
+			do {
+				let json = try JSONSerialization.jsonObject(
+					with: data,
+					options: [.fragmentsAllowed]
+				)
+				let options: JSONSerialization.WritingOptions = [
+					.prettyPrinted,
+					.sortedKeys,
+					.fragmentsAllowed,
+				]
+				let formatted = try JSONSerialization.data(withJSONObject: json, options: options)
+				return String(decoding: formatted, as: UTF8.self)
+			} catch { return source }
+		}
+		if file.url.pathExtension.lowercased() == "xml",
+		   !source.localizedCaseInsensitiveContains("<!DOCTYPE") {
+			if let xml = try? XMLDocument(data: data, options: [.nodeLoadExternalEntitiesNever]) {
+				return xml.xmlString(options: .nodePrettyPrint)
+			}
+		}
+		return source
 	}
 
 	private func getHTML(file: File) throws -> String {
@@ -139,7 +181,8 @@ class CodePreview: Preview {
 	func createPreviewVC(file: File) throws -> PreviewVC {
 		WebPreviewVC(
 			html: try getHTML(file: file),
-			stylesheets: getStylesheets()
+			stylesheets: getStylesheets(),
+			source: try file.read()
 		)
 	}
 }
