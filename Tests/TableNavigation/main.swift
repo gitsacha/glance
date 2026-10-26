@@ -108,4 +108,39 @@ check(
 	"Actual table page transition"
 )
 try capture(paged.view, name: "navigation")
+func labels(in view: NSView) -> [String] {
+	let own = (view as? NSTextField).map { [$0.stringValue] } ?? []
+	return own + view.subviews.flatMap { labels(in: $0) }
+}
+
+let largeURL = directory.appendingPathComponent("large.csv")
+let largeRows = (0 ..< 5002).map { "Invoice \($0 + 1),\($0 + 10),Open" }
+try ("Invoice,Amount,Status\n" + largeRows.joined(separator: "\n") + "\n").write(
+	to: largeURL,
+	atomically: true,
+	encoding: .utf8
+)
+let capped = try TSVPreview().createPreviewVC(file: File(url: largeURL)) as! TablePreviewVC
+window.contentViewController = capped
+capped.view.layoutSubtreeIfNeeded()
+check(capped.cells.count == 5000, "CSV display retains the original 5000-row cap")
+check(
+	labels(in: capped.view).contains { $0.contains("First 5000 rows only") },
+	"Truncation is visible in the actual native footer"
+)
+try capture(capped.view, name: "csv-table")
+check(capped.pageCount == 50, "Pagination covers only the retained preview rows")
+let exactURL = directory.appendingPathComponent("exact.csv")
+try ("Invoice,Amount,Status\n" + largeRows.prefix(5000).joined(separator: "\n") + "\n").write(
+	to: exactURL,
+	atomically: true,
+	encoding: .utf8
+)
+let exact = try TSVPreview().createPreviewVC(file: File(url: exactURL)) as! TablePreviewVC
+window.contentViewController = exact
+exact.view.layoutSubtreeIfNeeded()
+check(
+	!labels(in: exact.view).contains { $0.contains("rows only") },
+	"An exact-limit file is not marked truncated"
+)
 print("Passed \(checks) headless checks")

@@ -2,6 +2,8 @@ import Cocoa
 import os.log
 
 class TablePreviewVC: NSViewController, PreviewVC {
+	static let rowLimit = 5000
+	private let isTruncated: Bool
 	let headers: [String]
 	let cells: [[String]]
 	let pageSize = 100
@@ -34,8 +36,9 @@ class TablePreviewVC: NSViewController, PreviewVC {
 		cells: [[String]]
 	) {
 		self.headers = headers
-		self.cells = cells
-		orderedRowIndices = Array(cells.indices)
+		self.cells = Array(cells.prefix(Self.rowLimit))
+		isTruncated = cells.count > Self.rowLimit
+		orderedRowIndices = Array(self.cells.indices)
 		super.init(nibName: nibNameOrNil, bundle: nibBundleOrNil)
 	}
 
@@ -197,7 +200,9 @@ class TablePreviewVC: NSViewController, PreviewVC {
 		let start = currentPage * pageSize
 		let end = min(start + pageSize, cells.count)
 		let rowRange = cells.isEmpty ? "0 rows" : "Rows \(start + 1)–\(end) of \(cells.count)"
-		rowCountLabel.stringValue = "\(rowRange) · Page \(currentPage + 1) of \(pageCount)"
+		let count = isTruncated ? "First \(cells.count) rows only · Rows \(start + 1)–\(end)" :
+			rowRange
+		rowCountLabel.stringValue = "\(count) · Page \(currentPage + 1) of \(pageCount)"
 		previousButton.isEnabled = currentPage > 0
 		nextButton.isEnabled = currentPage + 1 < pageCount
 		tableView.reloadData()

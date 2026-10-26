@@ -27,7 +27,8 @@ class TSVPreview: Preview {
 			text: try file.read(),
 			delimiter: file.url.pathExtension
 				.lowercased() == "csv" ? "," : "\t",
-			limitTo: 5001,
+			// Include the header and one extra data row to detect a truncated preview.
+			limitTo: TablePreviewVC.rowLimit + 2,
 			loadColumns: false
 		)
 		return TablePreviewVC(headers: csv.header, cells: rows.rows)
