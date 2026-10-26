@@ -182,7 +182,7 @@ class CodePreview: Preview {
 		WebPreviewVC(
 			html: try getHTML(file: file),
 			stylesheets: getStylesheets(),
-			source: try file.read()
+			source: try getSource(file: file)
 		)
 	}
 }

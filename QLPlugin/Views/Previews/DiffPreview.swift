@@ -28,7 +28,7 @@ class DiffPreview: Preview {
 			return WebPreviewVC(html: "<p>Patch exceeds the 16 MB preview limit.</p>")
 		}
 		let source = try file.read()
-		return WebPreviewVC(html: Self.renderHTML(source: source))
+		return WebPreviewVC(html: Self.renderHTML(source: source), source: source)
 	}
 
 	/// Kept separate from file I/O so patch fixtures can exercise rendering directly.
