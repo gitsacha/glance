@@ -4,6 +4,9 @@ import Foundation
 /// May return `nil` if the file is not supported.
 class PreviewVCFactory {
 	static func getPreviewInitializer(fileURL: URL) -> Preview.Type? {
+		if (try? fileURL.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+			return FolderPreview.self
+		}
 		switch fileURL.pathExtension.lowercased() {
 			case "gz":
 				// `gzip` is only supported for tarballs
