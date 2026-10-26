@@ -7,6 +7,14 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		71D899F2B1CBC82250691C77 /* mermaid-LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = 99AD3D0E1D6F28B1C0521FAF /* mermaid-LICENSE */; };
+		C1CACE99B6B3D692AAFEC875 /* markdown-mermaid.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 26B04B39E60B6DCBCBFAF5B0 /* markdown-mermaid.min.js */; };
+		316FE4A0CD232BBF31E80197 /* markdown-mermaid.js in Resources */ = {isa = PBXBuildFile; fileRef = A33FD896B4BB41210310EBC8 /* markdown-mermaid.js */; };
+		2BEFFAF5E28A1FF88870FAE4 /* markdown-callouts.js in Resources */ = {isa = PBXBuildFile; fileRef = 32DC13C19ACAF5A164A9AEE6 /* markdown-callouts.js */; };
+		1A8D830F462BD0B7C65159E1 /* markdown-math.js in Resources */ = {isa = PBXBuildFile; fileRef = 199D5154B92EC5B6BCEC3101 /* markdown-math.js */; };
+		5E5FBBD2E9842470C104E10C /* DiffPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1234567890123456789002 /* DiffPreview.swift */; };
+		B3154650481D406E3407755C /* DatabasePreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBAACCDDEEFF001122334455 /* DatabasePreview.swift */; };
+		CA99F6187F7FF6BD4317E841 /* FolderPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCCDDEEFF001122334455 /* FolderPreview.swift */; };
 		AABBCCDDEEFF001122334456 /* FolderPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCCDDEEFF001122334455 /* FolderPreview.swift */; };
 		BBAACCDDEEFF001122334456 /* DatabasePreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBAACCDDEEFF001122334455 /* DatabasePreview.swift */; };
 		AA1234567890123456789001 /* DiffPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1234567890123456789002 /* DiffPreview.swift */; };
@@ -993,6 +1001,11 @@
 				7DCED7F2335C756F9A648BC2 /* KaTeX_Main-Italic.woff2 in Resources */,
 				FAA79A832F181F678DCE02EB /* KaTeX_Script-Regular.woff in Resources */,
 				185E8E8CA668C2BFF4C4EC12 /* shared-chroma.css in Resources */,
+				71D899F2B1CBC82250691C77 /* mermaid-LICENSE in Resources */,
+				C1CACE99B6B3D692AAFEC875 /* markdown-mermaid.min.js in Resources */,
+				316FE4A0CD232BBF31E80197 /* markdown-mermaid.js in Resources */,
+				2BEFFAF5E28A1FF88870FAE4 /* markdown-callouts.js in Resources */,
+				1A8D830F462BD0B7C65159E1 /* markdown-math.js in Resources */,
 				968B9979765401E97D8E95F2 /* KaTeX_Typewriter-Regular.woff2 in Resources */,
 				DC5CFE9FD39A7A0E0CA72155 /* KaTeX_SansSerif-Bold.woff2 in Resources */,
 				AE835581BC3DD2BECA2A5EFA /* KaTeX_Math-Italic.woff in Resources */,
@@ -1103,6 +1116,9 @@
 				2ACEAC162991CB6DEDA38CDB /* Script.swift in Sources */,
 				80DDEC2062D0FBC2ECFFE0E2 /* OutlinePreviewVC.swift in Sources */,
 				E919089E6B516166E90DDFFD /* CodePreview.swift in Sources */,
+				5E5FBBD2E9842470C104E10C /* DiffPreview.swift in Sources */,
+				B3154650481D406E3407755C /* DatabasePreview.swift in Sources */,
+				CA99F6187F7FF6BD4317E841 /* FolderPreview.swift in Sources */,
 				D4CD81D36918D89112223F45 /* TSVPreview.swift in Sources */,
 				2C3CF733FE28D4FB607CE7EB /* MarkdownPreview.swift in Sources */,
 				4209661604CB1B4798D1EF42 /* PreviewVCFactory.swift in Sources */,

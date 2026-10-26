@@ -47,6 +47,8 @@
 			<array>
 				<string>public.text</string>
 				<string>public.source-code</string>
+				<string>public.folder</string>
+				<string>org.sqlite.sqlite3</string>
 			</array>
 		</dict>
 	</array>

@@ -5,6 +5,7 @@ import os.log
 import UniformTypeIdentifiers
 
 class MarkdownPreview: Preview {
+	var imageRoot: URL?
 	private let chromaStylesheetURL = Bundle.main.url(
 		forResource: "shared-chroma",
 		withExtension: "css"
@@ -33,7 +34,8 @@ class MarkdownPreview: Preview {
 		do {
 			let html = Self.inlineLocalImages(
 				try HTMLRenderer.renderMarkdown(source),
-				beside: file.url
+				beside: file.url,
+				allowedRoot: imageRoot
 			)
 			return "<div class=\"markdown-body\">\(html)</div>"
 		} catch {
@@ -51,10 +53,11 @@ class MarkdownPreview: Preview {
 	/// reading.
 	static func inlineLocalImages(
 		_ html: String,
-		beside fileURL: URL
+		beside fileURL: URL,
+		allowedRoot: URL? = nil
 	) -> String {
 		let expression = try! NSRegularExpression(pattern: #"(<img\s[^>]*?src=")([^"]+)(")"#)
-		let root = fileURL.deletingLastPathComponent().resolvingSymlinksInPath()
+		let root = (allowedRoot ?? fileURL.deletingLastPathComponent()).resolvingSymlinksInPath()
 			.standardizedFileURL
 		func properties(_ image: CGImageSource) -> [CFString: Any] {
 			(CGImageSourceCopyPropertiesAtIndex(image, 0, nil) as? [CFString: Any]) ?? [:]
