@@ -64,7 +64,10 @@ class MarkdownPreview: Preview {
 	func createPreviewVC(file: File) throws -> PreviewVC {
 		WebPreviewVC(
 			html: try getHTML(file: file),
-			stylesheets: getStylesheets()
+			stylesheets: getStylesheets(),
+			scripts: ["markdown-mermaid.min", "markdown-mermaid"].compactMap { name in
+				Bundle.main.url(forResource: name, withExtension: "js").map { Script(url: $0) }
+			}
 		)
 	}
 }

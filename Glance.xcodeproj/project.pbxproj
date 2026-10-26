@@ -120,6 +120,9 @@
 		7EE0465C246EB5DE006172D9 /* AppIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EE0465B246EB5DE006172D9 /* AppIcon.swift */; };
 		7EE10F84244F679B007214D8 /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EE10F82244F6774007214D8 /* Log.swift */; };
 		7EE10F85244F696F007214D8 /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EE10F82244F6774007214D8 /* Log.swift */; };
+		1CC55A2D29181BE872B63C2A /* markdown-mermaid.js in Resources */ = {isa = PBXBuildFile; fileRef = A33FD896B4BB41210310EBC8 /* markdown-mermaid.js */; };
+		3B15094711B0308E427B5E41 /* markdown-mermaid.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 26B04B39E60B6DCBCBFAF5B0 /* markdown-mermaid.min.js */; };
+		4E7C6E0AA76FB5CD9922177B /* mermaid-LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = 99AD3D0E1D6F28B1C0521FAF /* mermaid-LICENSE */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -281,6 +284,9 @@
 		7ED140652450C671007A7C70 /* SupportedFilesWC.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SupportedFilesWC.swift; sourceTree = "<group>"; };
 		7EE0465B246EB5DE006172D9 /* AppIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIcon.swift; sourceTree = "<group>"; };
 		7EE10F82244F6774007214D8 /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
+		A33FD896B4BB41210310EBC8 /* markdown-mermaid.js */ = {isa = PBXFileReference; lastKnownFileType = text; path = "QLPlugin/Resources/markdown/markdown-mermaid.js"; sourceTree = SOURCE_ROOT; };
+		26B04B39E60B6DCBCBFAF5B0 /* markdown-mermaid.min.js */ = {isa = PBXFileReference; lastKnownFileType = text; path = "QLPlugin/Resources/markdown/markdown-mermaid.min.js"; sourceTree = SOURCE_ROOT; };
+		99AD3D0E1D6F28B1C0521FAF /* mermaid-LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = "QLPlugin/Resources/markdown/mermaid-LICENSE"; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -550,6 +556,9 @@
 			isa = PBXGroup;
 			children = (
 				7EB3643D244B03CC00D7F96F /* markdown-main.css */,
+				99AD3D0E1D6F28B1C0521FAF /* mermaid-LICENSE */,
+				26B04B39E60B6DCBCBFAF5B0 /* markdown-mermaid.min.js */,
+				A33FD896B4BB41210310EBC8 /* markdown-mermaid.js */,
 			);
 			path = markdown;
 			sourceTree = "<group>";
@@ -791,6 +800,9 @@
 				7EB36444244B03CC00D7F96F /* KaTeX_AMS-Regular.ttf in Resources */,
 				7EB36464244B03CC00D7F96F /* KaTeX_AMS-Regular.woff in Resources */,
 				7EB36482244B03CC00D7F96F /* markdown-main.css in Resources */,
+				4E7C6E0AA76FB5CD9922177B /* mermaid-LICENSE in Resources */,
+				3B15094711B0308E427B5E41 /* markdown-mermaid.min.js in Resources */,
+				1CC55A2D29181BE872B63C2A /* markdown-mermaid.js in Resources */,
 				7EB36462244B03CC00D7F96F /* KaTeX_Size4-Regular.woff in Resources */,
 				7EB3644A244B03CC00D7F96F /* KaTeX_Caligraphic-Bold.woff2 in Resources */,
 				7EB3644D244B03CC00D7F96F /* KaTeX_Caligraphic-Regular.woff in Resources */,
