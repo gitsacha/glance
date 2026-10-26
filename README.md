@@ -11,6 +11,10 @@
 
 This is a fork of the [original Glance plugin](https://github.com/samuelmeuli/glance). Unfortunately, the owner seems to have discarded the project a while ago, and the app is largely broken on newer macOS systems. The aim of this fork is to revive the project and maintain it for future updates. For now, we have added support for macOS Big Sur and fixed several internal bugs.
 
+## Standalone launcher
+
+A bundled native `glance` command opens local files in Glance windows using the existing preview controllers, including TypeScript source when Finder classifies `.ts` as video. Images, PDFs and media retain native Quick Look rendering. See [standalone launcher](docs/standalone-launcher.md) for build, verification and usage instructions. Folder/database previews, CSV tables and rich-preview enhancements are separate work.
+
 ## Installation
 
 You can install Glance through Homebrew using `brew install --cask chamburr/tap/glance`.
