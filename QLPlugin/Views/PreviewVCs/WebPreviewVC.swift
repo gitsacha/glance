@@ -43,19 +43,24 @@ class WebPreviewVC: NSViewController, PreviewVC, WKNavigationDelegate {
 	let html: String
 	private let stylesheets: [Stylesheet]
 	private let scripts: [Script]
+	private let source: String?
+	private let preferences = UserDefaults.standard
+	private var searchField: NSSearchField!
 	private(set) var webView: WKWebView!
 
 	required convenience init(
 		html: String,
 		stylesheets: [Stylesheet] = [],
-		scripts: [Script] = []
+		scripts: [Script] = [],
+		source: String? = nil
 	) {
 		self.init(
 			nibName: nil,
 			bundle: nil,
 			html: html,
 			stylesheets: stylesheets,
-			scripts: scripts
+			scripts: scripts,
+			source: source
 		)
 	}
 
@@ -64,9 +69,11 @@ class WebPreviewVC: NSViewController, PreviewVC, WKNavigationDelegate {
 		bundle nibBundleOrNil: Bundle?,
 		html: String,
 		stylesheets: [Stylesheet] = [],
-		scripts: [Script] = []
+		scripts: [Script] = [],
+		source: String? = nil
 	) {
 		self.html = html
+		self.source = source
 		self.stylesheets = stylesheets
 		self.scripts = scripts
 		super.init(nibName: nibNameOrNil, bundle: nibBundleOrNil)
@@ -91,24 +98,157 @@ class WebPreviewVC: NSViewController, PreviewVC, WKNavigationDelegate {
 		webView.allowsMagnification = true
 		webView.setValue(false, forKey: "drawsBackground")
 
-		webView.frame = view.bounds
-		webView.autoresizingMask = [.height, .width]
-		view.addSubview(webView)
+		searchField = NSSearchField()
+		searchField.placeholderString = "Find in preview"
+		searchField.target = self
+		searchField.action = #selector(findNext)
+		searchField.setContentHuggingPriority(.defaultLow, for: .horizontal)
+		let toolbar = NSStackView(views: [
+			button("Contents", action: #selector(toggleContents)), searchField,
+			button("Next", action: #selector(findNext)),
+			button("Copy", action: #selector(copySource)),
+			button("A−", action: #selector(smaller)), button("A+", action: #selector(larger)),
+			button("Wrap", action: #selector(toggleWrap)),
+		])
+		toolbar.spacing = 6
+		toolbar.edgeInsets = NSEdgeInsets(top: 8, left: 10, bottom: 8, right: 10)
+		let appearance = NSPopUpButton()
+		appearance.addItems(withTitles: ["System", "Light", "Dark"])
+		appearance.selectItem(at: max(0, min(2, preferences.integer(forKey: "previewAppearance"))))
+		appearance.target = self
+		appearance.action = #selector(changeAppearance(_:))
+		toolbar.addArrangedSubview(appearance)
+		changeAppearance(appearance)
+		let stack = NSStackView(views: [toolbar, webView])
+		stack.orientation = .vertical
+		stack.alignment = .leading
+		stack.spacing = 0
+		stack.translatesAutoresizingMaskIntoConstraints = false
+		view.addSubview(stack)
+		NSLayoutConstraint.activate([
+			stack.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+			stack.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+			stack.topAnchor.constraint(equalTo: view.topAnchor),
+			stack.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+			toolbar.widthAnchor.constraint(equalTo: stack.widthAnchor),
+			webView.widthAnchor.constraint(equalTo: stack.widthAnchor),
+		])
 		webView.loadHTMLString(documentHTML, baseURL: URL(string: "glance-resource://bundle/"))
+	}
+
+	private func button(_ title: String, action: Selector) -> NSButton {
+		NSButton(title: title, target: self, action: action)
 	}
 
 	var documentHTML: String {
 		let shared = Bundle.main.url(forResource: "shared-main", withExtension: "css")
 		let links = (shared.map { [Stylesheet(url: $0)] } ?? []) + stylesheets
+		let fontSize = max(10, min(
+			26,
+			preferences.integer(forKey: "previewFontSize") == 0
+				? 14 : preferences.integer(forKey: "previewFontSize")
+		))
 		return """
 		<!doctype html><html><head><meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1">
 		<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src glance-resource: 'unsafe-inline'; style-src glance-resource: 'unsafe-inline'; img-src data:; font-src glance-resource: data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
 		\(links.map { $0.getHTML() }.joined(separator: "\n"))
-		<style>:root { color-scheme: light dark; }</style></head><body><main>\(html)</main>
+		<style>
+		:root { color-scheme: light dark; } body { font-size: \(fontSize)px; }
+		#glance-toc { display:none; position:fixed; inset:0 auto 0 0; width:220px; overflow:auto;
+		padding:16px; box-sizing:border-box; background:var(--color-background-body); border-right:1px solid var(--color-border); }
+		#glance-toc a { display:block; padding:4px 0; overflow-wrap:anywhere; }
+		body.contents #glance-toc { display:block; } body.contents main { margin-left:240px; }
+		body.wrap pre { white-space:pre-wrap; overflow-wrap:anywhere; }
+		pre { counter-reset:line; } .line { display:block; } .line::before { counter-increment:line;
+		content:counter(line); display:inline-block; min-width:3em; padding-right:1em; opacity:.45; user-select:none; }
+		</style></head><body class="\(preferences.bool(forKey: "previewWrap") ? "wrap" : "")">
+		<nav id="glance-toc" aria-label="Table of contents"></nav><main>\(html)</main>
 		\(scripts.map { $0.getHTML() }.joined(separator: "\n"))
-		<script>if (window.glanceReady === undefined) window.glanceReady = true;</script></body></html>
+		<script>
+		const toc = document.getElementById('glance-toc');
+		document.querySelectorAll('main h1,main h2,main h3').forEach((heading,index) => {
+		  if (!heading.id) heading.id = 'heading-' + index;
+		  const link = document.createElement('a'); link.href = '#' + heading.id;
+		  link.textContent = heading.textContent; link.style.paddingLeft = ((Number(heading.tagName[1])-1)*10)+'px';
+		  toc.append(link);
+		});
+		if (window.glanceReady === undefined) window.glanceReady = true;
+		</script></body></html>
 		"""
+	}
+
+	@objc
+	private func findNext() {
+		if #available(macOS 11.0, *) {
+			let configuration = WKFindConfiguration()
+			configuration.caseSensitive = false
+			configuration.wraps = true
+			webView.find(searchField.stringValue, configuration: configuration) { _ in }
+		}
+	}
+
+	@objc
+	private func copySource() {
+		if let source = source {
+			NSPasteboard.general.clearContents()
+			NSPasteboard.general.setString(source, forType: .string)
+		} else {
+			webView.evaluateJavaScript("document.querySelector('main').innerText") { value, _ in
+				guard let text = value as? String else {
+					return
+				}
+				NSPasteboard.general.clearContents()
+				NSPasteboard.general.setString(text, forType: .string)
+			}
+		}
+	}
+
+	@objc
+	private func toggleContents() {
+		webView.evaluateJavaScript(
+			"document.body.classList.toggle('contents')",
+			completionHandler: nil
+		)
+	}
+
+	@objc
+	private func toggleWrap() {
+		let wrap = !preferences.bool(forKey: "previewWrap")
+		preferences.set(wrap, forKey: "previewWrap")
+		webView.evaluateJavaScript(
+			"document.body.classList.toggle('wrap', \(wrap))",
+			completionHandler: nil
+		)
+	}
+
+	@objc
+	private func larger() {
+		resizeFont(by: 1)
+	}
+
+	@objc
+	private func smaller() {
+		resizeFont(by: -1)
+	}
+
+	private func resizeFont(by change: Int) {
+		let stored = preferences.integer(forKey: "previewFontSize")
+		let current = max(10, min(26, stored == 0 ? 14 : stored))
+		let size = max(10, min(26, current + change))
+		preferences.set(size, forKey: "previewFontSize")
+		webView.evaluateJavaScript(
+			"document.body.style.fontSize = '\(size)px'",
+			completionHandler: nil
+		)
+	}
+
+	@objc
+	private func changeAppearance(_ sender: NSPopUpButton) {
+		let index = max(0, min(2, sender.indexOfSelectedItem))
+		preferences.set(index, forKey: "previewAppearance")
+		let names: [NSAppearance.Name?] = [nil, .aqua, .darkAqua]
+		webView.appearance = names[index].flatMap { NSAppearance(named: $0) }
 	}
 
 	func webView(

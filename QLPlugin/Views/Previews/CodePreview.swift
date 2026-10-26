@@ -139,7 +139,8 @@ class CodePreview: Preview {
 	func createPreviewVC(file: File) throws -> PreviewVC {
 		WebPreviewVC(
 			html: try getHTML(file: file),
-			stylesheets: getStylesheets()
+			stylesheets: getStylesheets(),
+			source: try file.read()
 		)
 	}
 }
